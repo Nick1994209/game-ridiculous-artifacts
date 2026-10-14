@@ -23,6 +23,8 @@ type Snapshot struct {
 	Players   []d.Player   `json:"players"`
 	Monsters  []d.Monster  `json:"monsters"`
 	Artifacts []d.Artifact `json:"artifacts"`
+	Medkits   []d.Medkit   `json:"medkits"`
+	Required  []int        `json:"required"`
 	Result    *Result      `json:"result"`
 }
 type Room struct {
@@ -33,6 +35,8 @@ type Room struct {
 	Players                     []*d.Player
 	Monsters                    []*d.Monster
 	Artifacts                   []d.Artifact
+	Medkits                     []d.Medkit
+	Required                    []int
 	Phase                       string
 	RoundID, Tick, EventID      uint64
 	Now, Deadline, NextArtifact float64
@@ -74,7 +78,7 @@ func (r *Room) Join(name, t string) (*d.Player, error) {
 		}
 	}
 	r.order++
-	p := &d.Player{ID: fmt.Sprintf("p%d", r.order), Name: name, Token: token(), Connected: true, Role: "spectator", Slot: -1, Order: r.order, Rect: d.Rect{W: 32, H: 46}, Facing: 1}
+	p := &d.Player{ID: fmt.Sprintf("p%d", r.order), Name: name, Collected: []int{}, Token: token(), Connected: true, Role: "spectator", Slot: -1, Order: r.order, Rect: d.Rect{W: 32, H: 46}, Facing: 1}
 	r.Players = append(r.Players, p)
 	r.queues()
 	return p, nil
@@ -118,17 +122,14 @@ func (r *Room) queues() {
 	}
 }
 func (r *Room) start() {
-	old := r.Map.ID
-	options := []d.Map{}
-	for _, m := range r.Maps {
-		if m.ID != old || len(r.Maps) == 1 {
-			options = append(options, m)
-		}
-	}
-	r.Map = options[r.RNG.Intn(len(options))]
+	// Visit every map once before the rotation repeats.
+	r.Map = r.Maps[r.RoundID%uint64(len(r.Maps))]
 	r.RoundID++
 	r.Result = nil
 	r.Artifacts = []d.Artifact{}
+	r.Medkits = []d.Medkit{}
+	r.Required = []int{}
+	r.NextArtifact = 0
 	r.Monsters = []*d.Monster{}
 	sort.SliceStable(r.Players, func(i, j int) bool {
 		a, b := r.Players[i], r.Players[j]
@@ -148,6 +149,7 @@ func (r *Room) start() {
 		p.Alive = false
 		p.HP = 0
 		p.Artifacts = 0
+		p.Collected = []int{}
 		p.MonsterKills = 0
 		p.PVPKills = 0
 		p.Buttons = d.Input{}
@@ -172,7 +174,19 @@ func (r *Room) start() {
 	for i := range r.Map.MonsterSpawns {
 		r.spawnMonster(i)
 	}
+	for i, s := range r.Map.MedkitSpawns {
+		r.Medkits = append(r.Medkits, d.Medkit{ID: fmt.Sprintf("h%d", i), Rect: d.Rect{X: s.X, Y: s.Y, W: 24, H: 24}, Available: true})
+	}
 	r.fillArtifacts()
+	// Choose the task from items that actually exist in this round.
+	for _, a := range r.Artifacts {
+		if !containsKind(r.Required, a.Kind) {
+			r.Required = append(r.Required, a.Kind)
+		}
+		if len(r.Required) == 5 {
+			break
+		}
+	}
 	r.Phase = "countdown"
 	r.Deadline = r.Now + r.Config.Countdown
 	r.emit("round.countdown", "", "", "", 0)
@@ -199,10 +213,14 @@ func (r *Room) Step() {
 	case "countdown":
 		if r.Now >= r.Deadline {
 			r.Phase = "playing"
-			r.Deadline = r.Now + r.Config.RoundSeconds
+			r.Deadline = r.Now + math.Min(600, r.Config.RoundSeconds)
 			r.emit("round.started", "", "", "", 0)
 		}
 	case "playing":
+		if r.Now >= r.Deadline {
+			r.finish("timeout", "")
+			break
+		}
 		r.simulate()
 		if r.Phase == "playing" {
 			alive := 0
@@ -259,7 +277,7 @@ func (r *Room) finish(reason, winner string) {
 	r.emit("round.finished", winner, "", reason, 0)
 }
 func (r *Room) State() Snapshot {
-	s := Snapshot{Phase: r.Phase, Remaining: math.Max(0, r.Deadline-r.Now), Players: []d.Player{}, Monsters: []d.Monster{}, Artifacts: r.Artifacts, Result: r.Result}
+	s := Snapshot{Phase: r.Phase, Remaining: math.Max(0, r.Deadline-r.Now), Players: []d.Player{}, Monsters: []d.Monster{}, Artifacts: r.Artifacts, Medkits: append([]d.Medkit{}, r.Medkits...), Required: append([]int{}, r.Required...), Result: r.Result}
 	for _, p := range r.Players {
 		s.Players = append(s.Players, *p)
 	}

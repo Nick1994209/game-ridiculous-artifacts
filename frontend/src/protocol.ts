@@ -14,6 +14,7 @@ export const playerSchema = rect.extend({
   slot: z.number().int(),
   hp: num,
   artifacts: num,
+  collected: z.array(num),
   pvpKills: num,
   monsterKills: num,
   connected: z.boolean(),
@@ -31,6 +32,10 @@ export const monsterSchema = rect.extend({
   state: z.string(),
 });
 export const artifactSchema = rect.extend({ id: z.string(), kind: num });
+export const medkitSchema = rect.extend({
+  id: z.string(),
+  available: z.boolean(),
+});
 export const mapSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -43,6 +48,7 @@ export const mapSchema = z.object({
   hazards: z.array(rect),
   spawns: z.array(point).length(4),
   artifactSpawns: z.array(point),
+  medkitSpawns: z.array(point).length(4),
   monsterSpawns: z.array(point.extend({ platform: num, kind: z.string() })),
 });
 export const resultSchema = z.object({
@@ -62,6 +68,8 @@ export const snapshotSchema = z.object({
   players: z.array(playerSchema),
   monsters: z.array(monsterSchema),
   artifacts: z.array(artifactSchema),
+  medkits: z.array(medkitSchema),
+  required: z.array(num),
   result: resultSchema.nullable(),
 });
 export const eventSchema = z.object({
@@ -83,6 +91,7 @@ const envelope = z.object({
 export type Rect = z.infer<typeof rect>;
 export type Player = z.infer<typeof playerSchema>;
 export type Monster = z.infer<typeof monsterSchema>;
+export type Medkit = z.infer<typeof medkitSchema>;
 export type Artifact = z.infer<typeof artifactSchema>;
 export type WorldMap = z.infer<typeof mapSchema>;
 export type Snapshot = z.infer<typeof snapshotSchema>;

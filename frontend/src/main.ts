@@ -1,3 +1,4 @@
+import { itemLabel } from "./items";
 import Phaser from "phaser";
 import "./style.css";
 import { Store } from "./state";
@@ -8,9 +9,9 @@ import { VIEW } from "./spatial";
 import { validateName, type Player } from "./protocol";
 const root = document.querySelector<HTMLDivElement>("#app")!;
 root.innerHTML = `<header><a class="brand" href="/">✦ <span>БЮРО НЕЛЕПЫХ<br><b>АРТЕФАКТОВ</b></span></a><div class="room-label">ЭКСПЕДИЦИЯ / <strong>MAIN</strong></div><div id="connection" class="connection">● Не подключено</div></header>
-<main><section class="title-row"><div><div class="eyebrow">МАЛЕНЬКИЕ ГЕРОИ. СОМНИТЕЛЬНЫЕ СОКРОВИЩА.</div><h1>Найти. Украсть. <em>Не умереть.</em></h1></div><div class="goal"><span>◇</span><div><b>5 артефактов</b><small>и слава совершенно ваша</small></div></div></section>
-<div class="layout"><section class="arena"><div class="arena-bar"><span>● <b id="map-name">Неизведанная территория</b></span><span id="round">Ожидание экспедиции</span><b id="timer">—:—</b></div><div class="stage"><div id="game"></div><div id="join" class="join-overlay"><form id="join-form" class="join-card"><div class="badge">НАБОР ИСКАТЕЛЕЙ ОТКРЫТ</div><div class="relic">✧<span>🧪</span>✧</div><h2>Сокровища ждут.<br>Здравый смысл — нет.</h2><p>Соберите пять нелепых артефактов раньше соперников. Остерегайтесь грибов. Они сегодня не в духе.</p><label for="name">КАК ВАС ЗАПОМНЯТ ЛЕТОПИСЦЫ?</label><input id="name" name="name" autocomplete="nickname" placeholder="Например, Барон Понедельник" required><p id="error" class="error" role="alert"></p><button type="submit">Отправиться за нелепостями <span>↗</span></button><small>До 4 игроков · 3 минуты · одна сомнительная победа</small></form></div><div id="center" class="center-overlay" hidden></div><div id="spectator" class="spectator" hidden></div><div id="reconnect" class="reconnect" hidden>Восстанавливаем связь с экспедицией…</div><pre id="debug"></pre></div><div class="controls"><span><kbd>A</kbd><kbd>D</kbd> движение</span><span><kbd>SPACE</kbd> прыжок</span><span><kbd>J</kbd> атака</span><span><kbd>TAB</kbd> участники</span><span><kbd>ESC</kbd> меню</span></div></section>
-<aside><div class="section-heading"><h2>Искатели</h2><span id="count">0 / 4</span></div><div id="players"></div><div class="field-note"><span>ПОЛЕВАЯ ЗАМЕТКА № 08</span><h3>Всё одинаково<br>бесценно.</h3><p>И зуб с пломбой, и сертификат на облако дают ровно одно очко.</p><div>🥾 &nbsp; 🦷 &nbsp; 🧪 &nbsp; 🥄</div></div><div class="feed-heading">ХРОНИКИ НЕЛЕПОСТИ</div><div id="feed" aria-live="polite"><p>Здесь начнётся ваша история.</p></div></aside></div><footer><span>Никаких достойных сокровищ не пострадало.</span><span>СОБИРАТЕЛИ НЕЛЕПЫХ АРТЕФАКТОВ <b> / MVP 01</b></span></footer></main>`;
+<main><section class="title-row"><div><div class="eyebrow">МАЛЕНЬКИЕ ГЕРОИ. СОМНИТЕЛЬНЫЕ СОКРОВИЩА.</div><h1>Найти. Украсть. <em>Не умереть.</em></h1></div><div class="goal"><span>◇</span><div><b>5 предметов по списку</b><small>и слава совершенно ваша</small></div></div></section>
+<div class="layout"><section class="arena"><div class="arena-bar"><span>● <b id="map-name">Неизведанная территория</b></span><span id="round">Ожидание экспедиции</span><b id="timer">—:—</b></div><div class="stage"><div id="game"></div><div id="join" class="join-overlay"><form id="join-form" class="join-card"><div class="badge">НАБОР ИСКАТЕЛЕЙ ОТКРЫТ</div><div class="relic">✧<span>🧪</span>✧</div><h2>Сокровища ждут.<br>Здравый смысл — нет.</h2><p>Соберите по одному из пяти предметов задания раньше соперников. Остерегайтесь грибов. Они сегодня не в духе.</p><label for="name">КАК ВАС ЗАПОМНЯТ ЛЕТОПИСЦЫ?</label><input id="name" name="name" autocomplete="off" placeholder="Например, Барон Понедельник" required><p id="error" class="error" role="alert"></p><button type="submit">Отправиться за нелепостями <span>↗</span></button><small>До 4 игроков · до 10 минут · одна сомнительная победа</small></form></div><div id="center" class="center-overlay" hidden></div><div id="spectator" class="spectator" hidden></div><div id="reconnect" class="reconnect" hidden>Восстанавливаем связь с экспедицией…</div><pre id="debug"></pre></div><div class="controls"><span><kbd>A</kbd><kbd>D</kbd> движение</span><span><kbd>W</kbd><kbd>↑</kbd> прыжок</span><span><kbd>SPACE</kbd> атака</span><span><kbd>TAB</kbd> участники</span><span><kbd>ESC</kbd> меню</span></div></section>
+<aside><div class="section-heading"><h2>Искатели</h2><span id="count">0 / 4</span></div><div id="players"></div><div class="field-note"><span>ЗАДАНИЕ РАУНДА</span><h3>Собрать по списку.</h3><div id="objectives">Задание появится перед стартом.</div><p>По одному предмету каждого вида. Повторы не засчитываются.</p><p>✚ 4 аптечки: +50 HP, восстановление через 60 с. Артефакты появляются по одному раз в 20 с.</p></div><div class="feed-heading">ХРОНИКИ НЕЛЕПОСТИ</div><div id="feed" aria-live="polite"><p>Здесь начнётся ваша история.</p></div></aside></div><footer><span>Никаких достойных сокровищ не пострадало.</span><span>СОБИРАТЕЛИ НЕЛЕПЫХ АРТЕФАКТОВ <b> / MVP 01</b></span></footer></main>`;
 const el = <T extends HTMLElement = HTMLElement>(id: string) =>
   document.getElementById(id) as T;
 const store = new Store();
@@ -33,7 +34,10 @@ const game = new Phaser.Game({
 });
 const form = el<HTMLFormElement>("join-form");
 const name = el<HTMLInputElement>("name");
-name.value = sessionStorage.getItem("artifact-name") ?? "";
+// Old versions persisted identity; each page load now starts a fresh login.
+sessionStorage.removeItem("artifact-name");
+sessionStorage.removeItem("artifact-session");
+name.value = "";
 form.addEventListener("submit", (e) => {
   e.preventDefault();
   const error = validateName(name.value);
@@ -42,7 +46,6 @@ form.addEventListener("submit", (e) => {
     return;
   }
   el("error").textContent = "";
-  sessionStorage.setItem("artifact-name", name.value.trim());
   network.connect(name.value.trim());
 });
 const connectionLabels = {
@@ -92,6 +95,7 @@ function playerCard(p: Player) {
 }
 let hudKey = "";
 let feedKey = "";
+let objectiveKey = "";
 let centerKey = "";
 let spectatorKey = "";
 let lastRole = "";
@@ -114,6 +118,24 @@ function ui() {
     noticeUntil = Date.now() + 3500;
   lastRole = store.role;
   const s = store.snapshot;
+  const ok = JSON.stringify([s?.required, store.self?.collected]);
+  if (ok !== objectiveKey) {
+    objectiveKey = ok;
+    const list = el("objectives");
+    list.replaceChildren();
+    if (!s?.required.length)
+      list.append(node("p", "Задание появится перед стартом."));
+    for (const kind of s?.required ?? []) {
+      const done = store.self?.collected.includes(kind);
+      list.append(
+        node(
+          "div",
+          `${done ? "✓" : "○"} ${itemLabel(kind)}`,
+          done ? "objective done" : "objective",
+        ),
+      );
+    }
+  }
   const players = s?.players.filter((p) => p.slot >= 0) ?? [];
   el("count").textContent = `${players.length} / 4`;
   el("map-name").textContent = store.map?.name ?? "Неизведанная территория";
@@ -192,6 +214,9 @@ function ui() {
   }
   const ck = JSON.stringify([
     s?.phase,
+    store.roundID,
+    store.map?.name,
+    s?.required,
     remaining,
     store.result,
     input.menu,
@@ -225,6 +250,7 @@ function ui() {
             "p",
             (
               {
+                collection_complete: "Все пять предметов задания собраны!",
                 five_artifacts: "Пять находок. Ни одной полезной.",
                 timeout: "Время истекло.",
                 all_dead: "Все искатели погибли.",
@@ -259,7 +285,6 @@ function ui() {
         const leave = node("button", "Покинуть экспедицию");
         leave.onclick = () => {
           network.stop();
-          sessionStorage.removeItem("artifact-session");
           store.reset();
           store.connection = "idle";
           input.menu = false;
@@ -272,6 +297,14 @@ function ui() {
       } else if (s?.phase === "countdown") {
         panel.classList.add("countdown");
         panel.append(
+          node("div", `РАУНД ${store.roundID}`, "eyebrow"),
+          node("h2", store.map?.name ?? "Новая экспедиция"),
+          node("p", "Соберите по одному предмету каждого вида:"),
+          node(
+            "div",
+            (s.required ?? []).map(itemLabel).join(" · "),
+            "round-objectives",
+          ),
           node("div", "ЭКСПЕДИЦИЯ НАЧНЁТСЯ ЧЕРЕЗ", "eyebrow"),
           node("strong", `${remaining}`),
           node(
@@ -287,9 +320,13 @@ function ui() {
   }
   const events = store.events
     .filter((e) =>
-      ["artifact.collected", "damage", "player.died", "monster.died"].includes(
-        e.type,
-      ),
+      [
+        "artifact.collected",
+        "medkit.collected",
+        "damage",
+        "player.died",
+        "monster.died",
+      ].includes(e.type),
     )
     .slice(-4);
   const ek = JSON.stringify(events.map((e) => e.id));
@@ -305,11 +342,13 @@ function ui() {
           "p",
           e.type === "artifact.collected"
             ? `◇ ${source} находит артефакт`
-            : e.type === "player.died"
-              ? `✕ ${target} покидает бой`
-              : e.type === "monster.died"
-                ? `✦ ${source} побеждает монстра`
-                : `⚔ ${source} → ${target}: ${e.amount}`,
+            : e.type === "medkit.collected"
+              ? `✚ ${source} восстанавливает ${e.amount} HP`
+              : e.type === "player.died"
+                ? `✕ ${target} покидает бой`
+                : e.type === "monster.died"
+                  ? `✦ ${source} побеждает монстра`
+                  : `⚔ ${source} → ${target}: ${e.amount}`,
         );
       }),
     );
@@ -318,8 +357,6 @@ function ui() {
 }
 const uiTimer = setInterval(ui, 100);
 ui();
-if (sessionStorage.getItem("artifact-session") && name.value)
-  network.connect(name.value);
 window.addEventListener(
   "pagehide",
   () => {

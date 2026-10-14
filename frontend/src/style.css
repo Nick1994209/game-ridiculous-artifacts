@@ -645,3 +645,19 @@ footer b {
     display: none;
   }
 }
+
+.objective {
+  padding: 6px 0;
+  font-size: 13px;
+  line-height: 1.4;
+}
+.objective.done {
+  color: #78e1bd;
+}
+.round-objectives {
+  max-width: 520px;
+  margin: 12px auto;
+  color: #f8d890;
+  font-size: 15px;
+  line-height: 1.7;
+}

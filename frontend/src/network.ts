@@ -22,6 +22,7 @@ export class Network {
   attempt = 0;
   stopped = true;
   name = "";
+  token = "";
   generation = 0;
   constructor(
     public store: Store,
@@ -41,6 +42,7 @@ export class Network {
   connect(name: string) {
     this.stop();
     this.name = name;
+    this.token = "";
     this.stopped = false;
     this.attempt = 0;
     this.store.reset();
@@ -50,7 +52,7 @@ export class Network {
   open() {
     if (this.stopped) return;
     const gen = ++this.generation;
-    const token = sessionStorage.getItem("artifact-session");
+    const token = this.token;
     this.store.connection = this.attempt ? "reconnecting" : "connecting";
     const socket = new WebSocket(this.url);
     this.socket = socket;
@@ -70,7 +72,7 @@ export class Network {
         if (m.type === "welcome") {
           clearTimeout(handshake);
           const w = welcome.parse(m.data);
-          sessionStorage.setItem("artifact-session", w.token);
+          this.token = w.token;
           this.store.id = w.playerID;
           this.store.role = w.role;
           this.store.queue = w.queue;
@@ -100,7 +102,7 @@ export class Network {
           const code = z.object({ code: z.string() }).parse(m.data).code;
           this.store.error = messages[code] ?? "Сервер отклонил сообщение.";
           if (code === "session_expired") {
-            sessionStorage.removeItem("artifact-session");
+            this.token = "";
             if (this.attempt === 0) {
               this.generation++;
               socket.close();

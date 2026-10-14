@@ -19,7 +19,7 @@ type Config struct {
 }
 
 func Default() Config {
-	return Config{30, 15, 128, 60, 180, 8, 3, 10, 3, 340, 1600, 820, .6, .35, 25, map[string]MonsterConfig{"mushroom": {50, 15, 80, 250, 1, 12}, "mimic": {100, 30, 45, 220, 1.4, 18}}}
+	return Config{30, 15, 128, 60, 600, 8, 5, 10, 20, 340, 1600, 820, .6, .35, 25, map[string]MonsterConfig{"mushroom": {50, 15, 80, 250, 1, 12}, "mimic": {100, 30, 45, 220, 1.4, 18}}}
 }
 func Load() (Config, error) {
 	c := Default()
@@ -40,6 +40,12 @@ func Load() (Config, error) {
 			}
 			*p = v
 		}
+	}
+	if c.RoundSeconds > 600 {
+		return c, fmt.Errorf("ROUND_SECONDS must not exceed 600")
+	}
+	if c.ArtifactRespawn < 20 {
+		return c, fmt.Errorf("ARTIFACT_RESPAWN_SECONDS must be at least 20")
 	}
 	if c.SnapshotRate > c.TickRate {
 		return c, fmt.Errorf("snapshot rate exceeds tick rate")

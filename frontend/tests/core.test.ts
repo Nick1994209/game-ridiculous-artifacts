@@ -27,6 +27,7 @@ const player: Player = {
   h: 46,
   hp: 100,
   artifacts: 0,
+  collected: [],
   pvpKills: 0,
   monsterKills: 0,
   connected: true,
@@ -42,6 +43,8 @@ const snapshot: Snapshot = {
   players: [player],
   monsters: [],
   artifacts: [],
+  medkits: [],
+  required: [0, 1, 2, 3, 4],
   result: null,
 };
 const msg = (type: string, data: unknown, roundID = 1, serverTick = 1) =>
@@ -278,4 +281,61 @@ it("processes session-expired control errors after server restart", () => {
     "error",
   );
   expect(s.roundID).toBe(9);
+});
+
+describe("render interpolation", () => {
+  function movingStore() {
+    const s = new Store();
+    s.id = "p1";
+    s.connection = "connected";
+    for (let i = 0; i < 2; i++) {
+      s.apply(
+        msg(
+          "snapshot",
+          {
+            ...snapshot,
+            players: [
+              { ...player, x: 100 + i * 20, y: 100 + i * 10 },
+              { ...player, id: "p2", x: 200 + i * 20, y: 100 + i * 10 },
+            ],
+          },
+          1,
+          i + 1,
+        ),
+        1000 + i * 50,
+      );
+    }
+    return s;
+  }
+  it("smooths the local player and opponents on every render frame", () => {
+    const s = movingStore();
+    expect(s.interpolated(1130)?.players.map((p) => p.x)).toEqual([104, 204]);
+    expect(s.interpolated(1145)?.players.map((p) => p.x)).toEqual([110, 210]);
+    expect(s.interpolated(1145)?.players.map((p) => p.y)).toEqual([105, 105]);
+    expect(s.self?.x).toBe(120);
+    s.id = "spectator";
+    expect(s.interpolated(1145)?.players.map((p) => p.x)).toEqual([110, 210]);
+  });
+  it("keeps death authoritative while positions are buffered", () => {
+    const s = movingStore();
+    s.self!.alive = false;
+    s.self!.role = "spectator";
+    expect(s.interpolated(1120)?.players[0]).toMatchObject({
+      alive: false,
+      role: "spectator",
+      x: 100,
+    });
+    expect(s.canInput).toBe(false);
+  });
+  it("clamps to buffered positions and freezes on disconnect", () => {
+    const s = movingStore();
+    expect(s.interpolated(1000)?.players[0].x).toBe(100);
+    expect(s.interpolated(2000)?.players[0].x).toBe(120);
+    s.connection = "reconnecting";
+    expect(s.interpolated(1145)).toBe(s.snapshot);
+    s.reset();
+    expect(s.interpolated(1145)).toBeNull();
+    s.apply(msg("snapshot", snapshot, 2, 1), 2000);
+    expect(s.interpolated(2000)).toBe(s.snapshot);
+  });
 });

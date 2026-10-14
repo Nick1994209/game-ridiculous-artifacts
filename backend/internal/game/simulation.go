@@ -91,14 +91,19 @@ func (r *Room) simulate() {
 			r.attack(p)
 		}
 		if p.Alive {
+			r.collectMedkit(p)
 			for i := 0; i < len(r.Artifacts); {
 				a := r.Artifacts[i]
-				if p.Rect.Overlaps(a.Rect) {
-					p.Artifacts++
+				if p.Rect.Overlaps(a.Rect) && containsKind(r.Required, a.Kind) && !containsKind(p.Collected, a.Kind) {
+					p.Collected = append(p.Collected, a.Kind)
+					p.Artifacts = len(p.Collected)
+					if r.NextArtifact == 0 {
+						r.NextArtifact = r.Now + math.Max(20, r.Config.ArtifactRespawn)
+					}
 					r.emit("artifact.collected", p.ID, a.ID, "pickup", 1)
 					r.Artifacts = append(r.Artifacts[:i], r.Artifacts[i+1:]...)
-					if p.Artifacts >= 5 {
-						r.finish("five_artifacts", p.ID)
+					if len(r.Required) == 5 && p.Artifacts == len(r.Required) {
+						r.finish("collection_complete", p.ID)
 						return
 					}
 				} else {
@@ -108,9 +113,18 @@ func (r *Room) simulate() {
 		}
 	}
 	r.monsters(dt)
-	if r.Now >= r.NextArtifact {
-		r.fillArtifacts()
-		r.NextArtifact = r.Now + r.Config.ArtifactRespawn
+	if r.NextArtifact > 0 && r.Now >= r.NextArtifact {
+		r.spawnArtifact()
+		r.NextArtifact = r.Now + math.Max(20, r.Config.ArtifactRespawn)
+		if len(r.Artifacts) >= 10 {
+			r.NextArtifact = 0
+		}
+	}
+	for i := range r.Medkits {
+		kit := &r.Medkits[i]
+		if !kit.Available && r.Now >= kit.RespawnAt {
+			kit.Available = true
+		}
 	}
 }
 func (r *Room) damage(p *d.Player, n int, source, cause string) {
@@ -199,19 +213,100 @@ func (r *Room) free(a d.Rect) bool {
 	}
 	return true
 }
-func (r *Room) fillArtifacts() {
-	n := len(r.Map.ArtifactSpawns)
-	start := r.RNG.Intn(n)
-	for i := 0; i < n && len(r.Artifacts) < 10; i++ {
-		s := r.Map.ArtifactSpawns[(start+i)%n]
-		a := d.Rect{X: s.X, Y: s.Y, W: 24, H: 24}
-		if r.free(a) {
-			r.EventID++
-			v := d.Artifact{ID: fmt.Sprintf("a%d", r.EventID), Kind: r.RNG.Intn(8), Rect: a}
-			r.Artifacts = append(r.Artifacts, v)
-			r.emit("artifact.spawned", "", v.ID, "spawn", 0)
+func containsKind(kinds []int, kind int) bool {
+	for _, k := range kinds {
+		if k == kind {
+			return true
 		}
 	}
+	return false
+}
+
+func (r *Room) collectMedkit(p *d.Player) {
+	if !p.Alive || p.HP >= 100 {
+		return
+	}
+	for i := range r.Medkits {
+		kit := &r.Medkits[i]
+		if kit.Available && p.Rect.Overlaps(kit.Rect) {
+			amount := min(50, 100-p.HP)
+			p.HP += amount
+			kit.Available = false
+			kit.RespawnAt = r.Now + 60
+			r.emit("medkit.collected", p.ID, kit.ID, "heal", amount)
+			return
+		}
+	}
+}
+
+const pickupSpacing = 240.0
+
+func (r *Room) pickupSpace(a d.Rect) bool {
+	for _, kit := range r.Medkits {
+		// Reserve health stations even during their cooldown.
+		if math.Hypot(a.X-kit.X, a.Y-kit.Y) < pickupSpacing {
+			return false
+		}
+	}
+	for _, item := range r.Artifacts {
+		if math.Hypot(a.X-item.X, a.Y-item.Y) < pickupSpacing {
+			return false
+		}
+	}
+	return r.free(a)
+}
+
+func (r *Room) fillArtifacts() {
+	for len(r.Artifacts) < 10 {
+		if !r.spawnArtifact() {
+			break
+		}
+	}
+}
+
+func (r *Room) spawnArtifact() bool {
+	if len(r.Artifacts) >= 10 || len(r.Map.ArtifactSpawns) == 0 {
+		return false
+	}
+	present := []int{}
+	for _, a := range r.Artifacts {
+		present = append(present, a.Kind)
+	}
+	kind := -1
+	// Restore missing task items before adding extras.
+	for _, k := range r.Required {
+		if !containsKind(present, k) {
+			kind = k
+			break
+		}
+	}
+	if kind < 0 {
+		start := r.RNG.Intn(8)
+		for i := 0; i < 8; i++ {
+			k := (start + i) % 8
+			if !containsKind(present, k) {
+				kind = k
+				break
+			}
+		}
+		if kind < 0 {
+			kind = start
+		}
+	}
+	n := len(r.Map.ArtifactSpawns)
+	start := r.RNG.Intn(n)
+	for i := 0; i < n; i++ {
+		s := r.Map.ArtifactSpawns[(start+i)%n]
+		a := d.Rect{X: s.X, Y: s.Y, W: 24, H: 24}
+		if r.pickupSpace(a) {
+			r.EventID++
+			v := d.Artifact{ID: fmt.Sprintf("a%d", r.EventID), Kind: kind, Rect: a}
+			r.Artifacts = append(r.Artifacts, v)
+			r.emit("artifact.spawned", "", v.ID, "spawn", 0)
+			return true
+		}
+	}
+	return false
 }
 func (r *Room) spawnMonster(i int) {
 	s := r.Map.MonsterSpawns[i]

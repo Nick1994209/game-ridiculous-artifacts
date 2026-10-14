@@ -23,8 +23,8 @@ go build ./...
 `STATIC_DIR=../frontend/dist` — каталог собранного frontend (в общем Docker-образе `/app/public`).
 `ALLOWED_ORIGINS=localhost:5173,127.0.0.1:5173` (список host:port).
 Числовые env: `TICK_RATE=30`, `SNAPSHOT_RATE=15`, `MAX_CONNECTIONS=128`, `INPUT_RATE=60`,
-`ROUND_SECONDS=180`, `INTERMISSION_SECONDS=8`, `COUNTDOWN_SECONDS=3`,
-`RECONNECT_GRACE_SECONDS=10`, `ARTIFACT_RESPAWN_SECONDS=3`,
+`ROUND_SECONDS=600`, `INTERMISSION_SECONDS=8`, `COUNTDOWN_SECONDS=5`,
+`RECONNECT_GRACE_SECONDS=10`, `ARTIFACT_RESPAWN_SECONDS=20`,
 `MOVE_SPEED=340`, `GRAVITY=1600`, `JUMP_SPEED=820`.
 Остальные параметры боя и типов монстров централизованы в `internal/platform/config.go`.
 Персонаж 32×46, монстр 38×40, предмет 24×24. Высота прыжка около 210 единиц.
@@ -42,10 +42,11 @@ go build ./...
 - `role`: надёжное уведомление `{role,queue}`; те же данные доступны в snapshot.
 - `map`: полная карта из встроенных JSON, только при подключении/смене раунда.
 - `snapshot`: `{phase,remaining,players,monsters,artifacts,result}`.
-  Игрок включает `lastProcessedInputSeq`, роль, очередь, слот, HP, alive, connected, счёт.
+  Snapshot также включает `required` (пять видов задания) и `medkits` (четыре аптечки с `available`).
+  Игрок включает `collected` (собранные виды), `lastProcessedInputSeq`, роль, очередь, слот, HP, alive, connected, счёт.
 - `round.countdown`, `round.started`, `round.finished`, `attack`, `hit`, `damage`,
   `player.died`, `player.killed`, `monster.died`, `monster.spawned`,
-  `artifact.collected`, `artifact.spawned`: доменные события с `id,source,target,cause,serverTick,amount`.
+  `artifact.collected`, `artifact.spawned`, `medkit.collected`: доменные события с `id,source,target,cause,serverTick,amount`.
 - `result`: `{winner,reason,standings}`; пустой winner означает отсутствие победителя.
 - `pong`: `{nonce}`; `spectate`: `{target}`.
 - `error`: `{code}` — `invalid_name`, `name_taken`, `session_expired`, `room_full`,
@@ -84,3 +85,5 @@ MVP: нет БД, авторизации, рейтинга, чата, глоба
 Общий Dockerfile в корне собирает server + frontend: `docker build -t ridiculous-artifacts .`
 из корня проекта. Подробности запуска — в корневом README. `backend/Dockerfile` остаётся
 вариантом для сборки только backend с build context `backend`.
+
+Раунд ограничен 600 секундами; конфигурация сверх этого лимита отклоняется. Интервал пополнения артефактов не меньше 20 секунд, по одному предмету за интервал. В начале создаются 10 артефактов, из пяти существующих разных видов формируется общее задание. Повторы и посторонние виды не подбираются. Победа — `collection_complete`. Аптечки дают 50 HP с ограничением до 100; здоровый или погибший игрок их не расходует. Каждая из четырёх фиксированных аптечек возвращается через 60 секунд после сбора.

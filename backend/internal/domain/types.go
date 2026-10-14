@@ -38,6 +38,7 @@ type Map struct {
 	Walls          []Rect         `json:"walls"`
 	Hazards        []Rect         `json:"hazards"`
 	Spawns         []Point        `json:"spawns"`
+	MedkitSpawns   []Point        `json:"medkitSpawns"`
 	ArtifactSpawns []Point        `json:"artifactSpawns"`
 	MonsterSpawns  []MonsterSpawn `json:"monsterSpawns"`
 }
@@ -56,6 +57,7 @@ type Player struct {
 	Rect
 	HP           int     `json:"hp"`
 	Artifacts    int     `json:"artifacts"`
+	Collected    []int   `json:"collected"`
 	PVPKills     int     `json:"pvpKills"`
 	MonsterKills int     `json:"monsterKills"`
 	Connected    bool    `json:"connected"`
@@ -92,6 +94,13 @@ type Artifact struct {
 	Kind int    `json:"kind"`
 	Rect
 }
+type Medkit struct {
+	ID string `json:"id"`
+	Rect
+	Available bool    `json:"available"`
+	RespawnAt float64 `json:"-"`
+}
+
 type Event struct {
 	ID     uint64 `json:"id"`
 	Type   string `json:"type"`

@@ -56,14 +56,16 @@ func TestPickupAtomicAndFifth(t *testing.T) {
 	r.Phase = "playing"
 	r.Deadline = 999
 	r.Monsters = nil
+	r.Required = []int{0, 1, 2, 3, 4}
+	p.Collected = []int{0, 1, 2}
 	p.Artifacts = 3
 	q.Rect = p.Rect
-	r.Artifacts = []d.Artifact{{ID: "one", Rect: p.Rect}}
+	r.Artifacts = []d.Artifact{{ID: "one", Kind: 3, Rect: p.Rect}}
 	r.simulate()
 	if p.Artifacts != 4 || q.Artifacts != 0 || r.Phase != "playing" {
 		t.Fatal("not atomic", p.Artifacts, q.Artifacts)
 	}
-	r.Artifacts = []d.Artifact{{ID: "two", Rect: p.Rect}}
+	r.Artifacts = []d.Artifact{{ID: "two", Kind: 4, Rect: p.Rect}}
 	r.simulate()
 	if r.Result == nil || r.Result.Winner != p.ID {
 		t.Fatal("no fifth win")
@@ -190,7 +192,7 @@ func TestMapRotation(t *testing.T) {
 	for i := 0; i < 30; i++ {
 		old := r.Map.ID
 		r.start()
-		if r.Map.ID == old {
+		if i > 0 && r.Map.ID == old {
 			t.Fatal("repeat")
 		}
 	}
@@ -265,5 +267,22 @@ func TestExpiredSpectatorsAreRemoved(t *testing.T) {
 	r.Step()
 	if len(r.Players) != 0 {
 		t.Fatal("expired session retained")
+	}
+}
+
+func TestFullMapCycle(t *testing.T) {
+	r := room(t)
+	for i := 0; i < len(r.Maps)*3; i++ {
+		r.start()
+		if r.Map.ID != r.Maps[i%len(r.Maps)].ID {
+			t.Fatalf("round %d: unexpected map %s", r.RoundID, r.Map.ID)
+		}
+	}
+	r.Maps = r.Maps[:1]
+	for i := 0; i < 2; i++ {
+		r.start()
+		if r.Map.ID != r.Maps[0].ID {
+			t.Fatal("single map rotation")
+		}
 	}
 }

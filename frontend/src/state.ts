@@ -1,3 +1,4 @@
+import { VIEW, interpolate } from "./spatial";
 import {
   parse,
   mapSchema,
@@ -131,6 +132,46 @@ export class Store {
       }
     }
     return m;
+  }
+  interpolated(now: number) {
+    const h = this.history;
+    const latest = this.snapshot;
+    if (!latest || this.connection !== "connected" || h.length < 2)
+      return latest;
+    const target = now - VIEW.interpolation;
+    let a = h[0],
+      b = h[0];
+    for (const frame of h) {
+      if (frame.time <= target) a = frame;
+      if (frame.time >= target) {
+        b = frame;
+        break;
+      }
+      b = frame;
+    }
+    const alpha =
+      a === b
+        ? 1
+        : Math.max(0, Math.min(1, (target - a.time) / (b.time - a.time)));
+    return {
+      ...latest,
+      players: latest.players.map((p) => {
+        const position = interpolate(
+          b.snapshot.players.find((v) => v.id === p.id) ?? p,
+          a.snapshot.players.find((v) => v.id === p.id),
+          alpha,
+        );
+        // Keep authoritative gameplay state (especially death and role changes).
+        return { ...p, x: position.x, y: position.y };
+      }),
+      monsters: latest.monsters.map((p) =>
+        interpolate(
+          b.snapshot.monsters.find((v) => v.id === p.id) ?? p,
+          a.snapshot.monsters.find((v) => v.id === p.id),
+          alpha,
+        ),
+      ),
+    };
   }
   reset() {
     this.id = "";

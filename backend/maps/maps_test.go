@@ -2,6 +2,7 @@ package maps
 
 import (
 	d "artifacts/internal/domain"
+	"artifacts/internal/platform"
 	"testing"
 )
 
@@ -41,5 +42,22 @@ func TestDisconnectedFloorRejected(t *testing.T) {
 	m.Spawns[0].Y = m.Height - 48
 	if err := ValidateRoutes(m); err == nil {
 		t.Fatal("disconnected spawn accepted")
+	}
+}
+
+func TestJumpHeadroom(t *testing.T) {
+	ms, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := platform.Default()
+	// Full jump plus the player body and a margin for the name above it.
+	required := c.Jump*c.Jump/(2*c.Gravity) + 46 + 40
+	for _, m := range ms {
+		for _, p := range m.Platforms {
+			if p.Y < required {
+				t.Errorf("%s: platform at %.1f needs at least %.1f headroom", m.ID, p.Y, required)
+			}
+		}
 	}
 }

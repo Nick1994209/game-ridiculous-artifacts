@@ -32,7 +32,7 @@ func Load() ([]domain.Map, error) {
 	return out, nil
 }
 func Validate(m domain.Map) error {
-	if m.ID == "" || m.Width <= 0 || m.Height <= 0 || len(m.Spawns) != 4 || len(m.ArtifactSpawns) < 12 || len(m.MonsterSpawns) < 4 {
+	if m.ID == "" || m.Width <= 0 || m.Height <= 0 || len(m.Spawns) != 4 || len(m.ArtifactSpawns) < 12 || len(m.MedkitSpawns) != 4 || len(m.MonsterSpawns) < 4 {
 		return fmt.Errorf("invalid map %s", m.ID)
 	}
 	for _, r := range append(append(append([]domain.Rect{}, m.Platforms...), m.Walls...), m.Hazards...) {
@@ -48,7 +48,7 @@ func Validate(m domain.Map) error {
 			}
 		}
 	}
-	for _, a := range m.ArtifactSpawns {
+	for _, a := range append(append([]domain.Point{}, m.ArtifactSpawns...), m.MedkitSpawns...) {
 		rect := domain.Rect{X: a.X, Y: a.Y, W: 24, H: 24}
 		supported := false
 		if a.X < 0 || a.Y < 0 || a.X+24 > m.Width || a.Y+24 > m.Height {
@@ -69,6 +69,25 @@ func Validate(m domain.Map) error {
 	for _, s := range m.MonsterSpawns {
 		if s.Platform < 0 || s.Platform >= len(m.Platforms) {
 			return fmt.Errorf("bad monster platform")
+		}
+	}
+	points := append(append([]domain.Point{}, m.ArtifactSpawns...), m.MedkitSpawns...)
+	for i, a := range points {
+		for _, b := range points[:i] {
+			if math.Hypot(a.X-b.X, a.Y-b.Y) < 240 {
+				return fmt.Errorf("%s: pickups too close", m.ID)
+			}
+		}
+		rect := domain.Rect{X: a.X, Y: a.Y, W: 24, H: 24}
+		for _, spawn := range m.Spawns {
+			if rect.Overlaps(domain.Rect{X: spawn.X, Y: spawn.Y, W: 32, H: 46}) {
+				return fmt.Errorf("%s: pickup blocked by player spawn", m.ID)
+			}
+		}
+		for _, spawn := range m.MonsterSpawns {
+			if rect.Overlaps(domain.Rect{X: spawn.X, Y: spawn.Y, W: 38, H: 40}) {
+				return fmt.Errorf("%s: pickup blocked by monster spawn", m.ID)
+			}
 		}
 	}
 	return ValidateRoutes(m)
@@ -107,7 +126,7 @@ func ValidateRoutes(m domain.Map) error {
 				}
 			}
 		}
-		for _, a := range m.ArtifactSpawns {
+		for _, a := range append(append([]domain.Point{}, m.ArtifactSpawns...), m.MedkitSpawns...) {
 			reachable := false
 			for i, p := range m.Platforms {
 				if seen[i] && a.X >= p.X && a.X+24 <= p.X+p.W && math.Abs(a.Y+26-p.Y) < 3 {

@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { Store } from "./state";
-import type { Rect, Player, Monster, Artifact } from "./protocol";
+import type { Rect, Player, Monster, Artifact, Medkit } from "./protocol";
 import {
   VIEW,
   SpatialIndex,
@@ -8,11 +8,10 @@ import {
   renderWindow,
   chunkKeys,
   intersects,
-  interpolate,
 } from "./spatial";
 const colors = [0x78e1bd, 0xf8c76c, 0xc3a4ff, 0x7fceff];
 const symbols = ["Ⅰ", "Ⅱ", "Ⅲ", "Ⅳ"];
-const icons = ["🥾", "🦷", "🧪", "🗺", "🔘", "🪨", "🥄", "☁"];
+import { itemIcons as icons } from "./items";
 const themes: Record<string, number> = {
   attic: 0x252139,
   archive: 0x172e37,
@@ -23,6 +22,7 @@ const themes: Record<string, number> = {
 type Static = Rect & { kind: "platform" | "hazard" };
 export class GameScene extends Phaser.Scene {
   gfx!: Phaser.GameObjects.Graphics;
+  backdrop!: Phaser.GameObjects.Graphics;
   labels = new Map<string, Phaser.GameObjects.Text>();
   index = new SpatialIndex<Static>([]);
   mapKey = "";
@@ -44,6 +44,7 @@ export class GameScene extends Phaser.Scene {
     super("world");
   }
   create() {
+    this.backdrop = this.add.graphics().setScrollFactor(0);
     this.gfx = this.add.graphics();
     this.events.once("shutdown", () => this.cleanup());
   }
@@ -55,7 +56,76 @@ export class GameScene extends Phaser.Scene {
     this.attacks.clear();
     this.index = new SpatialIndex([]);
     this.gfx?.clear();
+    this.backdrop?.clear();
     this.mapKey = "";
+  }
+  // Built once per map; low-contrast scenery stays behind the playable geometry.
+  drawBackdrop(theme: string) {
+    const g = this.backdrop;
+    g.clear();
+    const { width, height } = VIEW;
+    if (theme === "attic") {
+      g.lineStyle(18, 0x887293, 0.14);
+      for (let x = -300; x < width; x += 300) {
+        g.lineBetween(x, height, x + 350, 0);
+        g.lineBetween(x, 0, x + 350, height);
+      }
+      g.fillStyle(0xc5a183, 0.07).fillCircle(830, 130, 100);
+    } else if (theme === "archive") {
+      for (let x = 35; x < width; x += 220) {
+        g.fillStyle(0x091c26, 0.3).fillRect(x, 50, 180, height - 50);
+        for (let y = 120; y < height; y += 110) {
+          g.fillStyle(0x71978b, 0.16).fillRect(x, y, 180, 5);
+          for (let i = 0; i < 8; i++) {
+            const h = 35 + ((i * 13 + y) % 35);
+            g.fillStyle(i % 2 ? 0x8daa93 : 0x729bad, 0.12).fillRect(
+              x + 10 + i * 20,
+              y - h,
+              13,
+              h,
+            );
+          }
+        }
+      }
+    } else if (theme === "well") {
+      g.lineStyle(2, 0x7594ae, 0.12);
+      for (let y = 0; y < height; y += 85) {
+        g.lineBetween(0, y, width, y);
+        for (let x = ((y / 85) % 2) * 90; x < width; x += 180)
+          g.lineBetween(x, y, x, y + 85);
+      }
+      g.fillStyle(0x699ec2, 0.06).fillRect(400, 0, 300, height);
+    } else if (theme === "market") {
+      g.lineStyle(2, 0xd0a28c, 0.18).lineBetween(0, 80, width, 160);
+      for (let x = 0; x < width; x += 70) {
+        const y = 80 + (x / width) * 80;
+        g.fillStyle(x % 140 ? 0xbf879f : 0xc8ab7e, 0.18).fillTriangle(
+          x,
+          y,
+          x + 50,
+          y + 4,
+          x + 25,
+          y + 45,
+        );
+      }
+      for (let x = 30; x < width; x += 270) {
+        g.fillStyle(0x170f22, 0.25).fillRect(x, 360, 220, 290);
+        g.fillStyle(0xbf879f, 0.1).fillTriangle(
+          x - 20,
+          360,
+          x + 110,
+          270,
+          x + 240,
+          360,
+        );
+      }
+    } else if (theme === "museum") {
+      for (let x = 55; x < width; x += 260) {
+        g.fillStyle(0xa0a9ab, 0.08).fillRect(x, 40, 28, height);
+        g.lineStyle(5, 0xc3b18b, 0.15).strokeRect(x + 65, 170, 125, 155);
+        g.fillStyle(0x8f9caa, 0.08).fillEllipse(x + 128, 248, 65, 105);
+      }
+    }
   }
   text(
     id: string,
@@ -85,6 +155,7 @@ export class GameScene extends Phaser.Scene {
     const { map, snapshot } = this.store;
     if (!map || !snapshot) {
       this.gfx.clear();
+      this.backdrop.clear();
       for (const t of this.labels.values()) t.setVisible(false);
       return;
     }
@@ -101,9 +172,11 @@ export class GameScene extends Phaser.Scene {
       ]);
       this.cameras.main.setBounds(0, 0, map.width, map.height);
       this.cameras.main.setBackgroundColor(themes[map.theme] ?? 0x202637);
+      this.drawBackdrop(map.theme);
     }
-    const living = snapshot.players.filter((p) => p.alive && p.slot >= 0);
-    const self = this.store.self;
+    const rendered = this.store.interpolated(performance.now())!;
+    const living = rendered.players.filter((p) => p.alive && p.slot >= 0);
+    const self = rendered.players.find((p) => p.id === this.store.id);
     const focus =
       self?.alive && self.role === "active"
         ? self
@@ -143,11 +216,11 @@ export class GameScene extends Phaser.Scene {
         g.fillStyle(0xa1b4a0).fillRect(p.x + 3, p.y, p.w - 6, 4);
       }
     }
-    const remote = this.interpolated(performance.now());
     const entities = [
-      ...remote.players,
-      ...remote.monsters,
+      ...rendered.players,
+      ...rendered.monsters,
       ...snapshot.artifacts,
+      ...snapshot.medkits,
     ];
     this.total = entities.length;
     this.visible = 0;
@@ -156,6 +229,7 @@ export class GameScene extends Phaser.Scene {
       this.visible++;
       if ("name" in e) this.player(e, time);
       else if ("hp" in e) this.monster(e, time);
+      else if ("available" in e) this.medkit(e);
       else this.artifact(e, time);
     }
     for (const event of this.store.events) {
@@ -165,14 +239,31 @@ export class GameScene extends Phaser.Scene {
       const source = entities.find(
         (p) =>
           p.id ===
-          (event.type === "artifact.collected" ? event.source : event.target),
+          (["artifact.collected", "medkit.collected"].includes(event.type)
+            ? event.source
+            : event.target),
       );
-      if (source && ["damage", "artifact.collected"].includes(event.type))
+      if (
+        source &&
+        ["damage", "artifact.collected", "medkit.collected"].includes(
+          event.type,
+        )
+      )
         this.effects.push({
           x: source.x + source.w / 2,
           y: source.y - 15,
-          text: event.type === "damage" ? `−${event.amount}` : "+1 ◇",
-          color: event.type === "damage" ? "#ffa397" : "#f8d890",
+          text:
+            event.type === "damage"
+              ? `−${event.amount}`
+              : event.type === "medkit.collected"
+                ? `+${event.amount} HP`
+                : "+1 ◇",
+          color:
+            event.type === "damage"
+              ? "#ffa397"
+              : event.type === "medkit.collected"
+                ? "#78e1bd"
+                : "#f8d890",
           until: time + 850,
         });
       if (event.type === "round.finished" && this.store.result?.winner) {
@@ -222,45 +313,6 @@ export class GameScene extends Phaser.Scene {
       this.debug = `${Math.round(this.game.loop.actualFps)} FPS · ${this.visible}/${this.total} entities · ${this.chunks} chunks · ${this.store.history.length > 1 ? Math.round((1000 * (this.store.history.length - 1)) / (this.store.history.at(-1)!.time - this.store.history[0].time)) : 0} snapshots/s`;
     }
     this.lastFrame = time;
-  }
-  interpolated(now: number) {
-    const h = this.store.history;
-    const latest = this.store.snapshot!;
-    if (this.store.connection !== "connected" || h.length < 2) return latest;
-    const target = now - VIEW.interpolation;
-    let a = h[0],
-      b = h[0];
-    for (const frame of h) {
-      if (frame.time <= target) a = frame;
-      if (frame.time >= target) {
-        b = frame;
-        break;
-      }
-      b = frame;
-    }
-    const alpha =
-      a === b
-        ? 1
-        : Math.max(0, Math.min(1, (target - a.time) / (b.time - a.time)));
-    return {
-      ...latest,
-      players: latest.players.map((p) =>
-        p.id === this.store.id
-          ? p
-          : interpolate(
-              b.snapshot.players.find((v) => v.id === p.id) ?? p,
-              a.snapshot.players.find((v) => v.id === p.id),
-              alpha,
-            ),
-      ),
-      monsters: latest.monsters.map((p) =>
-        interpolate(
-          b.snapshot.monsters.find((v) => v.id === p.id) ?? p,
-          a.snapshot.monsters.find((v) => v.id === p.id),
-          alpha,
-        ),
-      ),
-    };
   }
   player(p: Player, time: number) {
     if (p.slot < 0) return;
@@ -351,6 +403,17 @@ export class GameScene extends Phaser.Scene {
       .fillCircle(m.x + 26, y + 29, 2);
     if (m.state === "attack")
       this.text(m.id, m.x + 20, y - 12, "!", "#ffa397", 24);
+  }
+  medkit(kit: Medkit) {
+    const g = this.gfx;
+    if (!kit.available) {
+      g.lineStyle(1, 0x78e1bd, 0.25).strokeRoundedRect(kit.x, kit.y, 24, 24, 5);
+      return;
+    }
+    g.fillStyle(0x78e1bd, 0.1).fillCircle(kit.x + 12, kit.y + 12, 23);
+    g.fillStyle(0xe2f5eb).fillRoundedRect(kit.x, kit.y, 24, 24, 5);
+    g.fillStyle(0x25896c).fillRect(kit.x + 9, kit.y + 4, 6, 16);
+    g.fillRect(kit.x + 4, kit.y + 9, 16, 6);
   }
   artifact(a: Artifact, time: number) {
     const g = this.gfx;

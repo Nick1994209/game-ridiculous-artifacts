@@ -23,11 +23,8 @@ export class InputController {
     return {
       left: this.keys.has("KeyA") || this.keys.has("ArrowLeft"),
       right: this.keys.has("KeyD") || this.keys.has("ArrowRight"),
-      jump:
-        this.keys.has("KeyW") ||
-        this.keys.has("ArrowUp") ||
-        this.keys.has("Space"),
-      attack: this.keys.has("KeyJ") || this.keys.has("KeyX"),
+      jump: this.keys.has("KeyW") || this.keys.has("ArrowUp"),
+      attack: this.keys.has("KeyJ") || this.keys.has("Space"),
     };
   }
   down = (e: KeyboardEvent) => {
